@@ -1,0 +1,429 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────
+// USERS & AUTHENTICATION
+// ─────────────────────────────────────────
+
+model User {
+  id            String       @id @default(cuid())
+  email         String       @unique
+  password_hash String?
+  name          String?
+  avatar_url    String?
+  role          UserRole     @default(USER)
+  is_verified   Boolean      @default(false)
+  is_active     Boolean      @default(true)
+  provider      AuthProvider @default(EMAIL)
+  provider_id   String?
+
+  created_at    DateTime     @default(now())
+  updated_at    DateTime     @updatedAt
+  deleted_at    DateTime?
+
+  // Relations
+  salaries      Salary[]
+  reviews       Review[]
+  interviews    Interview[]
+  offers        Offer[]
+  posts         Post[]
+  comments      Comment[]
+  saved_items   SavedItem[]
+  sessions      Session[]
+
+  @@index([email])
+  @@index([role])
+}
+
+enum UserRole {
+  USER
+  EMPLOYER
+  ADMIN
+}
+
+enum AuthProvider {
+  EMAIL
+  GOOGLE
+  LINKEDIN
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  user_id    String
+  token      String   @unique
+  expires_at DateTime
+  created_at DateTime @default(now())
+
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+}
+
+// ─────────────────────────────────────────
+// COMPANIES
+// ─────────────────────────────────────────
+
+model Company {
+  id              String      @id @default(cuid())
+  name            String      @unique
+  slug            String      @unique
+  logo_url        String?
+  website         String?
+  description     String?
+  industry        String?
+  sub_industry    String?
+  headquarters    String?
+  founded_year    Int?
+  employees_range String?     // e.g. "1000-5000"
+  revenue_range   String?
+  ceo             String?
+  linkedin_url    String?
+  glassdoor_url   String?
+  is_verified     Boolean     @default(false)
+  created_at      DateTime    @default(now())
+  updated_at      DateTime    @updatedAt
+  deleted_at      DateTime?
+
+  // Relations
+  salaries        Salary[]
+  reviews         Review[]
+  interviews      Interview[]
+  jobs            Job[]
+  offers          Offer[]
+  levels          Level[]
+  benefits        Benefit[]
+
+  @@index([slug])
+  @@index([industry])
+}
+
+// ─────────────────────────────────────────
+// SALARIES
+// ─────────────────────────────────────────
+
+model Salary {
+  id                  String    @id @default(cuid())
+  company_id          String
+  user_id             String?
+  role                String
+  level               String?
+  years_of_experience Int?
+  base_salary         Float
+  bonus               Float     @default(0)
+  equity              Float     @default(0)
+  total_compensation  Float
+  city                String?
+  state               String?
+  country             String    @default("India")
+  currency            String    @default("INR")
+  employment_type     String?   // e.g. "Full-time", "Contract"
+  is_verified         Boolean   @default(false)
+  source              String?   // "csv_import" | "user_submission"
+  submitted_at        DateTime  @default(now())
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @updatedAt
+  deleted_at          DateTime?
+
+  // Relations
+  company             Company   @relation(fields: [company_id], references: [id])
+  user                User?     @relation(fields: [user_id], references: [id])
+
+  @@index([company_id])
+  @@index([user_id])
+  @@index([role])
+  @@index([city])
+  @@index([total_compensation])
+}
+
+// ─────────────────────────────────────────
+// REVIEWS
+// ─────────────────────────────────────────
+
+model Review {
+  id                 String    @id @default(cuid())
+  company_id         String
+  user_id            String?
+  role               String?
+  city               String?
+  employment_status  String?   // "Current" | "Former"
+  rating             Float
+  work_life_rating   Float?
+  culture_rating     Float?
+  salary_rating      Float?
+  management_rating  Float?
+  career_rating      Float?
+  title              String?
+  pros               String?
+  cons               String?
+  summary            String?
+  recommend          Boolean?
+  helpful_count      Int       @default(0)
+  is_verified        Boolean   @default(false)
+  source             String?
+  submitted_at       DateTime  @default(now())
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @updatedAt
+  deleted_at          DateTime?
+
+  // Relations
+  company            Company   @relation(fields: [company_id], references: [id])
+  user               User?     @relation(fields: [user_id], references: [id])
+
+  @@index([company_id])
+  @@index([user_id])
+  @@index([rating])
+}
+
+// ─────────────────────────────────────────
+// INTERVIEWS
+// ─────────────────────────────────────────
+
+model Interview {
+  id             String              @id @default(cuid())
+  company_id     String
+  user_id        String?
+  role           String
+  difficulty     InterviewDifficulty
+  result         InterviewResult?
+  process        String?
+  tips           String?
+  rounds         Int?
+  duration_days  Int?
+  source         String?
+  submitted_at   DateTime            @default(now())
+  created_at     DateTime            @default(now())
+  updated_at     DateTime            @updatedAt
+  deleted_at     DateTime?
+
+  // Relations
+  company        Company             @relation(fields: [company_id], references: [id])
+  user           User?               @relation(fields: [user_id], references: [id])
+  questions      InterviewQuestion[]
+
+  @@index([company_id])
+  @@index([user_id])
+  @@index([role])
+  @@index([difficulty])
+}
+
+model InterviewQuestion {
+  id           String    @id @default(cuid())
+  interview_id String
+  question     String
+  tags         String[]
+  answer_count Int       @default(0)
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+
+  // Relations
+  interview    Interview @relation(fields: [interview_id], references: [id], onDelete: Cascade)
+
+  @@index([interview_id])
+  @@index([tags])
+}
+
+enum InterviewDifficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum InterviewResult {
+  OFFER
+  REJECTED
+  NO_OFFER
+  WITHDREW
+}
+
+// ─────────────────────────────────────────
+// LEVELS / CAREER LADDER
+// ─────────────────────────────────────────
+
+model Level {
+  id           String   @id @default(cuid())
+  company_id   String
+  level_number Int?
+  title        String
+  subtitle     String?
+  description  String?
+  order_index  Int      @default(0)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  // Relations
+  company      Company  @relation(fields: [company_id], references: [id])
+
+  @@unique([company_id, title])
+  @@index([company_id])
+}
+
+// ─────────────────────────────────────────
+// OFFERS
+// ─────────────────────────────────────────
+
+model Offer {
+  id              String    @id @default(cuid())
+  company_id      String
+  user_id         String?
+  role            String
+  level           String?
+  base_salary     Float
+  bonus           Float     @default(0)
+  equity          Float     @default(0)
+  benefits_value  Float     @default(0)
+  total_comp      Float
+  city            String?
+  country         String    @default("India")
+  currency        String    @default("INR")
+  offer_score     Int?
+  negotiated      Boolean   @default(false)
+  final_comp      Float?
+  source          String?
+  submitted_at    DateTime  @default(now())
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+  deleted_at      DateTime?
+
+  // Relations
+  company         Company   @relation(fields: [company_id], references: [id])
+  user            User?     @relation(fields: [user_id], references: [id])
+
+  @@index([company_id])
+  @@index([user_id])
+  @@index([role])
+}
+
+// ─────────────────────────────────────────
+// JOBS
+// ─────────────────────────────────────────
+
+model Job {
+  id              String    @id @default(cuid())
+  company_id      String
+  title           String
+  description     String?
+  location        String?
+  city            String?
+  country         String?
+  is_remote       Boolean   @default(false)
+  job_type        JobType   @default(FULL_TIME)
+  experience_min  Int?
+  experience_max  Int?
+  salary_min      Float?
+  salary_max      Float?
+  currency        String    @default("INR")
+  skills          String[]
+  apply_url       String?
+  is_active       Boolean   @default(true)
+  posted_at       DateTime  @default(now())
+  expires_at      DateTime?
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+  deleted_at      DateTime?
+
+  // Relations
+  company         Company   @relation(fields: [company_id], references: [id])
+
+  @@index([company_id])
+  @@index([title])
+  @@index([city])
+}
+
+enum JobType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERNSHIP
+  FREELANCE
+}
+
+// ─────────────────────────────────────────
+// BENEFITS
+// ─────────────────────────────────────────
+
+model Benefit {
+  id           String   @id @default(cuid())
+  company_id   String
+  category     String   // e.g. "Health", "PTO", "401k", "Remote", etc.
+  name         String
+  description  String?
+  rating       Float?
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  // Relations
+  company      Company  @relation(fields: [company_id], references: [id])
+
+  @@index([company_id])
+}
+
+// ─────────────────────────────────────────
+// COMMUNITY / FORUM
+// ─────────────────────────────────────────
+
+model Post {
+  id           String    @id @default(cuid())
+  user_id      String
+  category     String
+  title        String
+  body         String
+  tags         String[]
+  upvotes      Int       @default(0)
+  views        Int       @default(0)
+  is_pinned    Boolean   @default(false)
+  is_hot       Boolean   @default(false)
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+  deleted_at   DateTime?
+
+  // Relations
+  user         User      @relation(fields: [user_id], references: [id])
+  comments     Comment[]
+
+  @@index([user_id])
+  @@index([category])
+  @@index([created_at])
+}
+
+model Comment {
+  id         String    @id @default(cuid())
+  post_id    String
+  user_id    String
+  body       String
+  upvotes    Int       @default(0)
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
+
+  // Relations
+  post       Post      @relation(fields: [post_id], references: [id], onDelete: Cascade)
+  user       User      @relation(fields: [user_id], references: [id])
+
+  @@index([post_id])
+  @@index([user_id])
+}
+
+// ─────────────────────────────────────────
+// SAVED ITEMS
+// ─────────────────────────────────────────
+
+model SavedItem {
+  id          String   @id @default(cuid())
+  user_id     String
+  item_type   String   // "salary" | "company" | "review" | "job" | "interview"
+  item_id     String
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  // Relations
+  user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, item_type, item_id])
+  @@index([user_id])
+}
