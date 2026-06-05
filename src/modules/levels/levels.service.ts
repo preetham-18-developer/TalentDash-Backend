@@ -6,10 +6,14 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateLevelDto } from './dto/create-level.dto';
 import { Level } from '@prisma/client';
+import { RedisService } from '../redis/redis.service';
 
 @Injectable()
 export class LevelsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redisService: RedisService,
+  ) {}
 
   async create(dto: CreateLevelDto): Promise<Level> {
     // Verify company exists
@@ -43,7 +47,7 @@ export class LevelsService {
       where: { company_id: dto.company_id },
     });
 
-    return this.prisma.level.create({
+    const level = await this.prisma.level.create({
       data: {
         company_id: dto.company_id,
         title: dto.title,
@@ -53,6 +57,11 @@ export class LevelsService {
         order_index: levelCount,
       },
     });
+
+    // Invalidate comparison grid caches
+    await this.redisService.deletePattern('levels:compare:*');
+
+    return level;
   }
 
   async findByCompany(companyId: string): Promise<Level[]> {
@@ -70,6 +79,14 @@ export class LevelsService {
   }
 
   async compare(companyIds: string[]) {
+    const sortedIds = [...companyIds].sort().join(',');
+    const cacheKey = `levels:compare:${sortedIds}`;
+
+    const cachedData = await this.redisService.get(cacheKey);
+    if (cachedData) {
+      return JSON.parse(cachedData) as Record<string, unknown>;
+    }
+
     // Verify companies exist and are not deleted
     const companies = await this.prisma.company.findMany({
       where: {
@@ -135,9 +152,14 @@ export class LevelsService {
       };
     });
 
-    return {
+    const result = {
       companies,
       levels: grid,
     };
+
+    // Cache calculated grid for 1 hour (3600 seconds)
+    await this.redisService.set(cacheKey, JSON.stringify(result), 3600);
+
+    return result;
   }
 }

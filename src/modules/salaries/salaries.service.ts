@@ -3,10 +3,14 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateSalaryDto } from './dto/create-salary.dto';
 import { SalaryQueryDto } from './dto/salary-query.dto';
 import { Salary, Prisma } from '@prisma/client';
+import { RedisService } from '../redis/redis.service';
 
 @Injectable()
 export class SalariesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redisService: RedisService,
+  ) {}
 
   async create(userId: string, dto: CreateSalaryDto): Promise<Salary> {
     // Verify company exists
@@ -22,7 +26,7 @@ export class SalariesService {
     // Calculate total compensation
     const totalComp = dto.base_salary + (dto.bonus || 0) + (dto.equity || 0);
 
-    return this.prisma.salary.create({
+    const salary = await this.prisma.salary.create({
       data: {
         company_id: dto.company_id,
         user_id: userId,
@@ -42,6 +46,11 @@ export class SalariesService {
         source: 'user_submission',
       },
     });
+
+    // Invalidate company cache
+    await this.redisService.del(`company:slug:${company.slug}`);
+
+    return salary;
   }
 
   async findAll(query: SalaryQueryDto) {

@@ -2,10 +2,14 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateOfferDto } from './dto/create-offer.dto';
 import { Offer, Prisma } from '@prisma/client';
+import { RedisService } from '../redis/redis.service';
 
 @Injectable()
 export class OffersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redisService: RedisService,
+  ) {}
 
   async create(userId: string, dto: CreateOfferDto): Promise<Offer> {
     // Verify company exists
@@ -54,7 +58,7 @@ export class OffersService {
       }
     }
 
-    return this.prisma.offer.create({
+    const offer = await this.prisma.offer.create({
       data: {
         company_id: dto.company_id,
         user_id: userId,
@@ -74,6 +78,11 @@ export class OffersService {
         source: 'user_submission',
       },
     });
+
+    // Invalidate company cache
+    await this.redisService.del(`company:slug:${company.slug}`);
+
+    return offer;
   }
 
   async findByCompany(companyId: string, page = 1, limit = 20) {

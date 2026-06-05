@@ -2,10 +2,14 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateInterviewDto } from './dto/create-interview.dto';
 import { Interview, Prisma } from '@prisma/client';
+import { RedisService } from '../redis/redis.service';
 
 @Injectable()
 export class InterviewsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redisService: RedisService,
+  ) {}
 
   async create(userId: string, dto: CreateInterviewDto): Promise<Interview> {
     // Verify company exists
@@ -19,8 +23,8 @@ export class InterviewsService {
     }
 
     // Run inside database transaction to ensure question mappings are created atomically
-    return this.prisma.$transaction(async (tx) => {
-      const interview = await tx.interview.create({
+    const interview = await this.prisma.$transaction(async (tx) => {
+      const interviewRecord = await tx.interview.create({
         data: {
           company_id: dto.company_id,
           user_id: userId,
@@ -38,7 +42,7 @@ export class InterviewsService {
       if (dto.questions && dto.questions.length > 0) {
         await tx.interviewQuestion.createMany({
           data: dto.questions.map((q) => ({
-            interview_id: interview.id,
+            interview_id: interviewRecord.id,
             question: q.question,
             tags: q.tags || [],
           })),
@@ -46,10 +50,15 @@ export class InterviewsService {
       }
 
       return tx.interview.findUniqueOrThrow({
-        where: { id: interview.id },
+        where: { id: interviewRecord.id },
         include: { questions: true },
       });
     });
+
+    // Invalidate company cache
+    await this.redisService.del(`company:slug:${company.slug}`);
+
+    return interview;
   }
 
   async findByCompany(companyId: string, page = 1, limit = 20) {

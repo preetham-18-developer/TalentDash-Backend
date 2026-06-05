@@ -149,8 +149,12 @@ describe('Transactional Submissions (e2e)', () => {
           expect(body.success).toBe(true);
           expect(body.data.salaries.length).toBeGreaterThan(0);
           expect(body.data.salaries[0].role).toBe('Software Engineer');
-          expect(body.data.salaries[0].years_of_experience).toBeGreaterThanOrEqual(2);
-          expect(body.data.salaries[0].years_of_experience).toBeLessThanOrEqual(5);
+          expect(
+            body.data.salaries[0].years_of_experience,
+          ).toBeGreaterThanOrEqual(2);
+          expect(body.data.salaries[0].years_of_experience).toBeLessThanOrEqual(
+            5,
+          );
         });
     });
   });
@@ -224,8 +228,14 @@ describe('Transactional Submissions (e2e)', () => {
           rounds: 2,
           duration_days: 10,
           questions: [
-            { question: 'What is event loop in JS?', tags: ['JavaScript', 'Frontend'] },
-            { question: 'Design a rate limiter.', tags: ['System Design', 'Backend'] },
+            {
+              question: 'What is event loop in JS?',
+              tags: ['JavaScript', 'Frontend'],
+            },
+            {
+              question: 'Design a rate limiter.',
+              tags: ['System Design', 'Backend'],
+            },
           ],
         })
         .expect(201)
@@ -235,14 +245,20 @@ describe('Transactional Submissions (e2e)', () => {
             data: {
               id: string;
               role: string;
-              questions: Array<{ id: string; question: string; tags: string[] }>;
+              questions: Array<{
+                id: string;
+                question: string;
+                tags: string[];
+              }>;
             };
           };
           expect(body.success).toBe(true);
           expect(body.data.id).toBeDefined();
           expect(body.data.role).toBe('Senior SDE');
           expect(body.data.questions.length).toBe(2);
-          expect(body.data.questions[0].question).toBe('What is event loop in JS?');
+          expect(body.data.questions[0].question).toBe(
+            'What is event loop in JS?',
+          );
           expect(body.data.questions[0].tags).toContain('JavaScript');
         });
     });

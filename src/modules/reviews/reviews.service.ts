@@ -2,10 +2,14 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { Review, Prisma } from '@prisma/client';
+import { RedisService } from '../redis/redis.service';
 
 @Injectable()
 export class ReviewsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redisService: RedisService,
+  ) {}
 
   async create(userId: string, dto: CreateReviewDto): Promise<Review> {
     // Verify company exists
@@ -18,7 +22,7 @@ export class ReviewsService {
       );
     }
 
-    return this.prisma.review.create({
+    const review = await this.prisma.review.create({
       data: {
         company_id: dto.company_id,
         user_id: userId,
@@ -40,6 +44,11 @@ export class ReviewsService {
         source: 'user_submission',
       },
     });
+
+    // Invalidate company cache
+    await this.redisService.del(`company:slug:${company.slug}`);
+
+    return review;
   }
 
   async findByCompany(companyId: string, page = 1, limit = 20) {

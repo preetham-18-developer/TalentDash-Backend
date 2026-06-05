@@ -8,10 +8,14 @@ import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 import { CompanyQueryDto } from './dto/company-query.dto';
 import { Company, Prisma } from '@prisma/client';
+import { RedisService } from '../redis/redis.service';
 
 @Injectable()
 export class CompaniesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redisService: RedisService,
+  ) {}
 
   private slugify(name: string): string {
     return name
@@ -108,6 +112,12 @@ export class CompaniesService {
   }
 
   async findBySlug(slug: string) {
+    const cacheKey = `company:slug:${slug}`;
+    const cachedData = await this.redisService.get(cacheKey);
+    if (cachedData) {
+      return JSON.parse(cachedData) as Record<string, unknown>;
+    }
+
     const company = await this.prisma.company.findFirst({
       where: { slug, deleted_at: null },
     });
@@ -157,7 +167,7 @@ export class CompaniesService {
       }),
     ]);
 
-    return {
+    const result = {
       ...company,
       stats: {
         counts: {
@@ -180,6 +190,11 @@ export class CompaniesService {
         },
       },
     };
+
+    // Cache computed stats for 1 hour (3600 seconds)
+    await this.redisService.set(cacheKey, JSON.stringify(result), 3600);
+
+    return result;
   }
 
   async update(id: string, dto: UpdateCompanyDto): Promise<Company> {
@@ -208,17 +223,30 @@ export class CompaniesService {
       data.slug = slug;
     }
 
-    return this.prisma.company.update({
+    const updatedCompany = await this.prisma.company.update({
       where: { id },
       data,
     });
+
+    // Invalidate caches
+    await this.redisService.del(`company:slug:${company.slug}`);
+    if (updatedCompany.slug !== company.slug) {
+      await this.redisService.del(`company:slug:${updatedCompany.slug}`);
+    }
+
+    return updatedCompany;
   }
 
   async remove(id: string): Promise<Company> {
-    await this.findById(id);
-    return this.prisma.company.update({
+    const company = await this.findById(id);
+    const deletedCompany = await this.prisma.company.update({
       where: { id },
       data: { deleted_at: new Date() },
     });
+
+    // Invalidate cache
+    await this.redisService.del(`company:slug:${company.slug}`);
+
+    return deletedCompany;
   }
 }
